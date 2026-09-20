@@ -28,17 +28,20 @@ from mcp.client.stdio import stdio_client
 
 async def list_available_tools(session: ClientSession) -> list[str]:
     """Return tool names from session.list_tools() as a list of strings."""
-    raise NotImplementedError("TODO 1: Implement list_available_tools.")
+    result = await session.list_tools()
+    return [tool.name for tool in result.tools]
 
 
 async def list_available_resources(session: ClientSession) -> list[tuple[str, str]]:
     """Return (uri, name) tuples. Cast .uri to str."""
-    raise NotImplementedError("TODO 2: Implement list_available_resources.")
+    result = await session.list_resources()
+    return [(str(resource.uri), resource.name) for resource in result.resources]
 
 
 async def call_read_file(session: ClientSession, filename: str) -> str:
     """Call read_file tool and return result.content[0].text."""
-    raise NotImplementedError("TODO 3: Implement call_read_file.")
+    result = await session.call_tool("read_file", {"path": filename})
+    return result.content[0].text
 
 
 async def connect_and_run(server_script_path: str) -> dict[str, Any]:
@@ -49,7 +52,31 @@ async def connect_and_run(server_script_path: str) -> dict[str, Any]:
         "resources"    -> list[tuple]
         "file_content" -> str   (from call_read_file(TEST_FILE))
     """
-    raise NotImplementedError("TODO 4: Implement connect_and_run.")
+    import os
+    import pathlib
+
+    server_path = pathlib.Path(server_script_path).resolve()
+
+    params = StdioServerParameters(
+        command=sys.executable,
+        args=[str(server_path)],
+        cwd=str(server_path.parent),
+        env=os.environ.copy(),
+    )
+
+    async with stdio_client(params) as (read, write):
+        async with ClientSession(read, write) as session:
+            await session.initialize()
+
+            tools = await list_available_tools(session)
+            resources = await list_available_resources(session)
+            file_content = await call_read_file(session, TEST_FILE)
+
+            return {
+                "tools": tools,
+                "resources": resources,
+                "file_content": file_content,
+            }
 
 
 TEST_FILE = "utils.py"
